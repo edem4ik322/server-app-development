@@ -1,0 +1,25 @@
+C4Container
+    title C4 Container — Система учета склада
+
+    Person(storekeeper, "Кладовщик", "Складские операции")
+    Person(analyst, "Аналитик закупок", "Управление остатками")
+    Person(admin, "Администратор", "Управление складами и правами")
+
+    System_Boundary(c1, "Складская система") {
+        Container(client, "Клиентский интерфейс (Web / ТСД)", "React / Flutter", "Рабочее место кладовщика и аналитика")
+        Container(backend, "Backend Service", "Node.js / Express", "Бизнес-логика склада, транзакции, остатки")
+        ContainerDb(db, "Main Database", "PostgreSQL", "Хранение данных в 3NF (UUID)")
+        ContainerDb(redis, "Cache & Queue", "Redis", "Кэш остатков и очередь алертов")
+    }
+
+    System_Ext(notifications, "Сервис уведомлений", "Telegram / Email алерты")
+
+    Rel(storekeeper, client, "Использует ТСД", "HTTPS")
+    Rel(analyst, client, "Использует Web", "HTTPS")
+    Rel(admin, client, "Использует Web", "HTTPS")
+
+    Rel(client, backend, "API-запросы", "JSON / HTTPS")
+
+    Rel(backend, db, "Данные 3NF", "SQL")
+    Rel(backend, redis, "Кэш / Очереди", "RESP")
+    Rel(backend, notifications, "Алерты", "HTTPS")

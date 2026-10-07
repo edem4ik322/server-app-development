@@ -1,0 +1,788 @@
+openapi: 3.0.3
+info:
+  title: WMS Inventory Management API
+  description: |
+    REST API для системы учета складских запасов (Вариант №12).
+    Позволяет управлять каталогом товаров, отслеживать адресное хранение,
+    фиксировать складские движения (приемка, списание, перемещение)
+    и контролировать минимальные остатки с защитой от списания в минус.
+  version: 1.0.0
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Локальный сервер разработки
+
+tags:
+  - name: Аутентификация
+    description: Вход сотрудников и выдача JWT-токенов
+  - name: Каталог товаров
+    description: Управление номенклатурой и настройка порогов запасов
+  - name: Склады и Остатки
+    description: Адресное хранение и просмотр остатков на складах
+  - name: Складские операции
+    description: Проведение операций движения товаров (приемка, списание, перемещение, инвентаризация)
+  - name: Алерты и Закупки
+    description: Контроль дефицитных позиций и предупреждения о низком остатке
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Аутентификация
+      summary: Вход в систему и получение токена
+      description: Аутентификация сотрудника по email и паролю с выдачей JWT-токена доступа.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Успешный вход в систему
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '400':
+          description: Некорректные входные данные
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Неверный email или пароль
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products:
+    get:
+      tags:
+        - Каталог товаров
+      summary: Получение каталога товаров
+      description: Возвращает список товаров с поддержкой фильтрации по категории и поисковому запросу.
+      operationId: getProducts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category_id
+          in: query
+          required: false
+          description: Фильтр по UUID категории
+          schema:
+            type: string
+            format: uuid
+        - name: query
+          in: query
+          required: false
+          description: Поиск по наименованию или артикулу (SKU)
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          description: Номер страницы (пагинация)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          required: false
+          description: Количество элементов на странице
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Список товаров успешно получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Каталог товаров
+      summary: Создание нового товара
+      description: Добавление новой товарной позиции в каталог системы. Доступно только Администратору.
+      operationId: createProduct
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+      responses:
+        '201':
+          description: Товар успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Ошибка валидации входных данных
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Товар с таким артикулом (SKU) уже существует
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /products/{id}/threshold:
+    patch:
+      tags:
+        - Каталог товаров
+      summary: Обновление минимального порога остатка товара
+      description: Установка минимального неснижаемого остатка (min_stock_level) для формирования алертов дефицита.
+      operationId: updateProductThreshold
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID товара
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateThresholdRequest'
+      responses:
+        '200':
+          description: Порог успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResponse'
+        '400':
+          description: Порог не может быть отрицательным числом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль PROCUREMENT_ANALYST или ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Товар с указанным ID не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /warehouses/{warehouse_id}/stock:
+    get:
+      tags:
+        - Склады и Остатки
+      summary: Просмотр остатков товаров на складе
+      description: Возвращает список позиций и ячеек хранения для выбранного склада.
+      operationId: getWarehouseStock
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: warehouse_id
+          in: path
+          required: true
+          description: UUID склада
+          schema:
+            type: string
+            format: uuid
+        - name: low_stock_only
+          in: query
+          required: false
+          description: Показывать только позиции с остатком ниже минимального порога
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Остатки на складе успешно получены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockItemListResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Склад с указанным ID не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /warehouses/{id}:
+    delete:
+      tags:
+        - Склады и Остатки
+      summary: Удаление склада
+      description: Удаление склада из системы. Доступно только Администратору. Запрещено, если на складе числятся ненулевые остатки.
+      operationId: deleteWarehouse
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID удаляемого склада
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Склад успешно удален (тело ответа отсутствует)
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Склад не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Невозможно удалить склад с активными остатками товаров
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /stock/transactions:
+    post:
+      tags:
+        - Складские операции
+      summary: Проведение складской операции
+      description: |
+        Фиксирует движение товаров (приемка RECEIPT, списание ISSUE, перемещение TRANSFER, инвентаризация ADJUSTMENT).
+        Проверяет наличие достаточного остатка, чтобы баланс не ушел в минус.
+      operationId: createStockTransaction
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+      responses:
+        '201':
+          description: Складская операция успешно зарегистрирована
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Некорректные параметры операции
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль STOREKEEPER)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Указанный товар или склад не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Ошибка дефицита — попытка списать больше остатка (защита от отрицательного баланса)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /alerts/low-stock:
+    get:
+      tags:
+        - Алерты и Закупки
+      summary: Получение списка предупреждений о дефиците
+      description: Возвращает активные алерты по позициям, остаток которых опустился ниже min_stock_level.
+      operationId: getLowStockAlerts
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Фильтр по статусу алерта
+          schema:
+            type: string
+            enum: [ACTIVE, ORDERED, RESOLVED]
+            default: ACTIVE
+      responses:
+        '200':
+          description: Список алертов успешно получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LowStockAlertListResponse'
+        '401':
+          description: Требуется авторизация
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Доступ запрещен (требуется роль PROCUREMENT_ANALYST или ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Передавайте токен в заголовке Authorization в формате `Bearer <JWT_TOKEN>`
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - code
+        - message
+        - timestamp
+      properties:
+        code:
+          type: string
+          example: INSUFFICIENT_STOCK
+          description: Строковый код бизнес-ошибки
+        message:
+          type: string
+          example: Недостаточно товара на складе для выполнения списания
+          description: Понятное текстовое описание ошибки
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-10-07T22:30:00Z'
+        details:
+          type: array
+          items:
+            type: string
+          example:
+            - "Текущий остаток: 3 шт."
+            - "Запрошено к списанию: 10 шт."
+          description: Дополнительные пояснения к ошибке
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: ivanov@warehouse.ru
+        password:
+          type: string
+          format: password
+          example: Password123!
+
+    AuthTokenResponse:
+      type: object
+      required:
+        - access_token
+        - token_type
+        - expires_in
+        - user
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          example: 3600
+          description: Время жизни токена в секундах
+        user:
+          $ref: '#/components/schemas/UserResponse'
+
+    UserResponse:
+      type: object
+      required:
+        - id
+        - email
+        - full_name
+        - role
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: ivanov@warehouse.ru
+        full_name:
+          type: string
+          example: Иванов Иван Иванович
+        role:
+          type: string
+          enum: [STOREKEEPER, PROCUREMENT_ANALYST, ADMIN]
+          example: STOREKEEPER
+
+    CreateProductRequest:
+      type: object
+      required:
+        - sku
+        - name
+        - category_id
+        - unit_of_measure
+        - min_stock_level
+      properties:
+        sku:
+          type: string
+          example: ELEC-00941
+          description: Уникальный артикул товара
+        name:
+          type: string
+          example: Дрель ударная DeWalt DWD024
+        category_id:
+          type: string
+          format: uuid
+          example: c9bf9e57-1685-4c89-bafb-ff5af830be8a
+        unit_of_measure:
+          type: string
+          example: шт
+        min_stock_level:
+          type: integer
+          minimum: 0
+          example: 10
+          description: Порог запаса, ниже которого формируется алерт
+
+    UpdateThresholdRequest:
+      type: object
+      required:
+        - min_stock_level
+      properties:
+        min_stock_level:
+          type: integer
+          minimum: 0
+          example: 15
+          description: Новое значение минимального порога остатка
+
+    ProductResponse:
+      type: object
+      required:
+        - id
+        - sku
+        - name
+        - category_id
+        - unit_of_measure
+        - min_stock_level
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 7b819f20-9cb5-4cf5-99d7-83eb5a9a4d33
+        sku:
+          type: string
+          example: ELEC-00941
+        name:
+          type: string
+          example: Дрель ударная DeWalt DWD024
+        category_id:
+          type: string
+          format: uuid
+          example: c9bf9e57-1685-4c89-bafb-ff5af830be8a
+        unit_of_measure:
+          type: string
+          example: шт
+        min_stock_level:
+          type: integer
+          example: 15
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-10-01T10:00:00Z'
+
+    ProductListResponse:
+      type: object
+      required:
+        - items
+        - total
+        - page
+        - limit
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResponse'
+        total:
+          type: integer
+          example: 45
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+
+    StockItemResponse:
+      type: object
+      required:
+        - id
+        - product_id
+        - product_name
+        - sku
+        - warehouse_id
+        - bin_location
+        - quantity
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3b942f77-5120-4286-9fcf-b67ff940a022
+        product_id:
+          type: string
+          format: uuid
+          example: 7b819f20-9cb5-4cf5-99d7-83eb5a9a4d33
+        product_name:
+          type: string
+          example: Дрель ударная DeWalt DWD024
+        sku:
+          type: string
+          example: ELEC-00941
+        warehouse_id:
+          type: string
+          format: uuid
+          example: e3a0a38d-8692-4fcf-bc27-2c114620f512
+        bin_location:
+          type: string
+          example: A-04-12
+          description: Адрес ячейки хранения (ряд-стеллаж-полка)
+        quantity:
+          type: integer
+          minimum: 0
+          example: 8
+          description: Фактическое количество на остатке
+
+    StockItemListResponse:
+      type: object
+      required:
+        - warehouse_id
+        - items
+        - total_positions
+      properties:
+        warehouse_id:
+          type: string
+          format: uuid
+          example: e3a0a38d-8692-4fcf-bc27-2c114620f512
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockItemResponse'
+        total_positions:
+          type: integer
+          example: 120
+
+    CreateTransactionRequest:
+      type: object
+      required:
+        - transaction_type
+        - product_id
+        - warehouse_id
+        - quantity
+        - bin_location
+      properties:
+        transaction_type:
+          type: string
+          enum: [RECEIPT, ISSUE, TRANSFER, ADJUSTMENT]
+          example: ISSUE
+          description: |
+            * RECEIPT - Приемка товара от поставщика
+            * ISSUE - Отгрузка товара покупателю / списание
+            * TRANSFER - Перемещение в другой склад/ячейку
+            * ADJUSTMENT - Корректировка по итогам инвентаризации
+        product_id:
+          type: string
+          format: uuid
+          example: 7b819f20-9cb5-4cf5-99d7-83eb5a9a4d33
+        warehouse_id:
+          type: string
+          format: uuid
+          example: e3a0a38d-8692-4fcf-bc27-2c114620f512
+        bin_location:
+          type: string
+          example: A-04-12
+        quantity:
+          type: integer
+          minimum: 1
+          example: 5
+        target_warehouse_id:
+          type: string
+          format: uuid
+          description: Заполняется только для операции TRANSFER
+          example: 11111111-2222-3333-4444-555555555555
+        target_bin_location:
+          type: string
+          description: Заполняется только для операции TRANSFER
+          example: B-01-02
+        notes:
+          type: string
+          example: Отгрузка по накладной № ТН-4892
+
+    TransactionResponse:
+      type: object
+      required:
+        - id
+        - transaction_type
+        - product_id
+        - warehouse_id
+        - quantity
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 8872b213-90d2-43ce-9a3b-28f096239121
+        transaction_type:
+          type: string
+          example: ISSUE
+        product_id:
+          type: string
+          format: uuid
+          example: 7b819f20-9cb5-4cf5-99d7-83eb5a9a4d33
+        warehouse_id:
+          type: string
+          format: uuid
+          example: e3a0a38d-8692-4fcf-bc27-2c114620f512
+        quantity:
+          type: integer
+          example: 5
+        bin_location:
+          type: string
+          example: A-04-12
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-10-07T22:35:00Z'
+
+    LowStockAlertResponse:
+      type: object
+      required:
+        - alert_id
+        - product_id
+        - product_name
+        - sku
+        - current_stock
+        - min_stock_level
+        - status
+        - created_at
+      properties:
+        alert_id:
+          type: string
+          format: uuid
+          example: 994a32b1-419b-43d9-933b-85d985a9bc12
+        product_id:
+          type: string
+          format: uuid
+          example: 7b819f20-9cb5-4cf5-99d7-83eb5a9a4d33
+        product_name:
+          type: string
+          example: Дрель ударная DeWalt DWD024
+        sku:
+          type: string
+          example: ELEC-00941
+        current_stock:
+          type: integer
+          example: 4
+        min_stock_level:
+          type: integer
+          example: 15
+        status:
+          type: string
+          enum: [ACTIVE, ORDERED, RESOLVED]
+          example: ACTIVE
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-10-07T22:15:00Z'
+
+    LowStockAlertListResponse:
+      type: object
+      required:
+        - total_alerts
+        - items
+      properties:
+        total_alerts:
+          type: integer
+          example: 2
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LowStockAlertResponse'

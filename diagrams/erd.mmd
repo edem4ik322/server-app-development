@@ -1,0 +1,75 @@
+erDiagram
+    roles ||--o{ users : "назначает"
+    categories ||--o{ products : "содержит"
+    warehouses ||--o{ stock_items : "хранит"
+    products ||--o{ stock_items : "учитывается"
+    users ||--o{ stock_transactions : "создает"
+    products ||--o{ stock_transactions : "фиксирует"
+    products ||--o{ reorder_alerts : "создает"
+
+    roles {
+        uuid id PK
+        varchar code UK
+        varchar name
+    }
+
+    users {
+        uuid id PK
+        varchar email UK
+        varchar password_hash
+        varchar full_name
+        uuid role_id FK
+        timestamp created_at
+    }
+
+    warehouses {
+        uuid id PK
+        varchar name
+        varchar address
+        boolean is_active
+        timestamp created_at
+    }
+
+    categories {
+        uuid id PK
+        varchar name UK
+        text description
+    }
+
+    products {
+        uuid id PK
+        varchar sku UK
+        varchar name
+        uuid category_id FK
+        int min_stock_level
+        varchar unit_of_measure
+        timestamp created_at
+    }
+
+    stock_items {
+        uuid id PK
+        uuid product_id FK
+        uuid warehouse_id FK
+        int quantity
+        varchar bin_location
+        timestamp updated_at
+    }
+
+    stock_transactions {
+        uuid id PK
+        uuid product_id FK
+        uuid warehouse_id FK
+        uuid user_id FK
+        varchar tx_type
+        int quantity
+        timestamp created_at
+    }
+
+    reorder_alerts {
+        uuid id PK
+        uuid product_id FK
+        int current_qty
+        int min_qty
+        varchar status
+        timestamp created_at
+    }
