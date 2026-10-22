@@ -35,7 +35,6 @@
 ├── .gitignore                    # Исключения Git (.env, node_modules, dist)
 ├── ARCHITECTURE.md               # Архитектурный отчет из ЛР1
 ├── openapi.yaml                  # Спецификация REST API (OpenAPI 3.0.3) из ЛР2
-├── EXPLANATION.md                # Простое руководство для защиты лабораторной
 ├── package.json                  # Манифест зависимостей и скрипты запуска
 ├── tsconfig.json                 # Конфигурация компилятора TypeScript
 └── README.md                     # Документация проекта
