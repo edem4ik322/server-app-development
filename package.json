@@ -1,0 +1,31 @@
+{
+  "name": "wms-inventory-api",
+  "version": "1.0.0",
+  "description": "WMS Inventory Management API - Лабораторная работа №3 (Вариант №12)",
+  "main": "dist/cmd/main.js",
+  "scripts": {
+    "dev": "tsx watch src/cmd/main.ts",
+    "build": "tsc",
+    "start": "node dist/cmd/main.js"
+  },
+  "keywords": [
+    "clean-architecture",
+    "layered-architecture",
+    "wms",
+    "inventory",
+    "express",
+    "typescript"
+  ],
+  "author": "Рустемов Эдем",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
