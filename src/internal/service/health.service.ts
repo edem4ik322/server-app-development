@@ -1,9 +1,6 @@
 import { AppConfig } from '../config/config';
 import { IHealthRepository } from '../repository/health.repository';
 
-/**
- * Формат ответа Health Check согласно спецификации Лабораторной работы №3
- */
 export interface HealthStatus {
   status: 'pass' | 'fail';
   app_name: string;
@@ -11,17 +8,10 @@ export interface HealthStatus {
   environment: string;
 }
 
-/**
- * Интерфейс сервиса здоровья (Dependency Inversion)
- */
 export interface IHealthService {
   getHealth(): Promise<HealthStatus>;
 }
 
-/**
- * Слой бизнес-логики (Domain / Service Layer)
- * Не знает деталей HTTP (Request/Response) и работает только с чистыми данными.
- */
 export class HealthService implements IHealthService {
   private config: AppConfig;
   private healthRepo: IHealthRepository;

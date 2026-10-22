@@ -1,12 +1,8 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Загрузка переменных окружения из файла .env в корне проекта
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-/**
- * Интерфейс типизированной конфигурации приложения
- */
 export interface AppConfig {
   appName: string;
   appEnv: string;
@@ -14,9 +10,6 @@ export interface AppConfig {
   port: number;
 }
 
-/**
- * Считывание и валидация конфигурации из переменных окружения
- */
 export function loadConfig(): AppConfig {
   return {
     appName: process.env.APP_NAME || 'WMS Inventory Management API',

@@ -1,10 +1,6 @@
 import { Request, Response } from 'express';
 import { IHealthService } from '../service/health.service';
 
-/**
- * Слой представления / HTTP-контроллер (API / Transport Layer)
- * Отвечает за прием HTTP-запроса, вызов сервиса и формирование ответа клиенту.
- */
 export class HealthController {
   private healthService: IHealthService;
 
@@ -12,9 +8,6 @@ export class HealthController {
     this.healthService = healthService;
   }
 
-  /**
-   * Обработчик GET /api/v1/health
-   */
   getHealth = async (_req: Request, res: Response): Promise<void> => {
     try {
       const healthData = await this.healthService.getHealth();
